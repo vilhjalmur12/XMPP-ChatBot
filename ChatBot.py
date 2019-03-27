@@ -10,6 +10,7 @@ import sys
 import logging
 import getpass
 from optparse import OptionParser
+import time
 
 import sleekxmpp
 
@@ -63,6 +64,8 @@ class MUCBot(sleekxmpp.ClientXMPP):
         self.add_event_handler("message" , self.reccieve_message)
 
 
+
+
     def start(self, event):
         """
         Process the session_start event.
@@ -84,10 +87,29 @@ class MUCBot(sleekxmpp.ClientXMPP):
                                         # password=the_room_password,
                                         wait=True)
 
+    def log(self, command, sender):
+        """Do some logging"""
+        # TODO: breyta þessu í lampart
+        timestamp = time.time()
+        print("hello world")
+
+        whole_string = f"{str(timestamp)}\t{sender.split('/')[0]}\t{command}"
+
+
+
+        #logging.warning("hello")
+        #logging.basicConfig(filename='./commands.log', filemode='w', format='%(name)s\t%(levelname)s\t%(message)s\n')
+
+
+
+        with open('commands.log', 'w') as f:
+            f.write(whole_string)
 
     def reccieve_message(self, msg):
-        print('From: ', msg['from'])
-        print(msg['body'])
+        print('Command inbound: ', msg['body'])
+        self.log(msg['body'], msg['from'])
+        spltCommand = msg['body'].split()
+
 
 
     def muc_message(self, msg):
@@ -194,17 +216,10 @@ if __name__ == '__main__':
         # if xmpp.connect(('talk.google.com', 5222)):
         #     ...
 
-        arg = ""
 
-        while arg is not "/quit":
+        xmpp.process(block=True)
 
-            to = raw_input("Send to: ")
-            arg = raw_input("Message: ")
 
-            xmpp.send_message(mto=to,
-                              mbody=arg)
-
-        #xmpp.process(block=True)
         print("Done")
     else:
         print("Unable to connect.")
