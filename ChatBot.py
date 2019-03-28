@@ -37,9 +37,11 @@ class MUCBot(sleekxmpp.ClientXMPP):
     def __init__(self, jid, password, room, nick):
         sleekxmpp.ClientXMPP.__init__(self, jid, password)
 
+        self.jid = jid
         self.room = room
         self.nick = nick
         self.incoming_log = False
+        self.bot_room = "botroom@conference.3.18.234.195"
 
         # The session_start event will be triggered when
         # the bot establishes its connection with the server
@@ -98,19 +100,22 @@ class MUCBot(sleekxmpp.ClientXMPP):
         #logging.basicConfig(filename='commands.log', filemode='w', format='%(name)s\t%(levelname)s\t%(message)s\n')
         #logging.info("new stuff")
 
-        with open('commands.log', 'a') as f:
+        with open(f"{self.jid}_log.log", 'a') as f:
             f.write(whole_string)
 
     def reccieve_message(self, msg):
-        print('Command inbound: ', msg['body'])
-        self.log(msg['body'], msg['from'])
 
-        spltCommand = msg['body'].split()
+        if msg['from'].bare != self.bot_room:
+            print('Command inbound: ', msg['body'])
 
-        if not spltCommand:
-            return
+            self.log(msg['body'], msg['from'])
 
-        self.splitAndCommand(spltCommand, msg['from'])
+            spltCommand = msg['body'].split()
+
+            if not spltCommand:
+                return
+
+            self.splitAndCommand(spltCommand, msg['from'])
 
 
     def splitAndCommand(self, command, sender):
@@ -121,6 +126,22 @@ class MUCBot(sleekxmpp.ClientXMPP):
             self.send_message(mto=sender.bare,
                               mbody=self.getLogString())
         # TODO: Setja öll commands hér
+        elif headCommand == "request":
+            self.send_message(mto=self.bot_room,
+                              mbody='accept',
+                              mtype='groupchat')
+        elif headCommand == "accept":
+            self.send_message(mto=self.bot_room,
+                              mbody='verify',
+                              mtype='groupchat')
+        elif headCommand == "verify":
+            self.send_message(mto=self.bot_room,
+                              mbody='accepted',
+                              mtype='groupchat')
+        elif headCommand == "accepted":
+            self.send_message(mto=self.bot_room,
+                              mbody='cool',
+                              mtype='groupchat')
         else:
             self.send_message(mto=sender.bare, mbody="I did not recognize your command")
 
@@ -152,41 +173,28 @@ class MUCBot(sleekxmpp.ClientXMPP):
                    for stanza objects and the Message stanza to see
                    how it may be used.
         """
-        if msg['mucnick'] != self.nick and self.nick in msg['body']:
-            if 'request' in msg['body']:
+        if msg['mucnick'] != self.nick:
+
+            headCommand = msg["body"].split()[0]
+            print(msg['from'].bare)
+            if 'request' == headCommand:
                 self.send_message(mto=msg['from'].bare,
-                              mbody="bot1, accept.",
-                              mtype='groupchat')
+                                mbody=f"accept {self.jid}",
+                                mtype='groupchat')
+            elif 'accept' == headCommand:
+                print("got accept")
                 self.send_message(mto=msg['from'].bare,
-                              mbody="bot2, accept.",
-                              mtype='groupchat')
+                                mbody=f"verify {self.jid}",
+                                mtype='groupchat')
+            elif 'verify' == headCommand:
                 self.send_message(mto=msg['from'].bare,
-                              mbody="bot3, accept.",
-                              mtype='groupchat')
+                                mbody=f"accepted {self.jid}",
+                                mtype='groupchat')
+            elif 'accepted' == headCommand:
                 self.send_message(mto=msg['from'].bare,
-                              mbody="bot4, accept.",
-                              mtype='groupchat')
-            if 'accept.' in msg['body']:
-                self.send_message(mto=msg['from'].bare,
-                              mbody="verify, %s." % msg['mucnick'],
-                              mtype='groupchat')
-            if 'verify' in msg['body']:
-                self.send_message(mto=msg['from'].bare,
-                              mbody="bot1, accepted.",
-                              mtype='groupchat')
-                self.send_message(mto=msg['from'].bare,
-                              mbody="bot2, accepted.",
-                              mtype='groupchat')
-                self.send_message(mto=msg['from'].bare,
-                              mbody="bot3, accepted.",
-                              mtype='groupchat')
-                self.send_message(mto=msg['from'].bare,
-                              mbody="bot4, accepted.",
-                              mtype='groupchat')
-            if 'accepted' in msg['body']:
-                self.send_message(mto=msg['from'].bare,
-                              mbody="cool",
-                              mtype='groupchat')
+                                mbody="cool",
+                                mtype='groupchat')
+
             """
             self.send_message(mto=msg['from'].bare,
                               mbody="I heard that, %s." % msg['mucnick'],
@@ -244,14 +252,20 @@ if __name__ == '__main__':
     #logging.basicConfig(level=opts.loglevel,
                         #format='%(levelname)-8s %(message)s')
 
-    if opts.jid is None:
-        opts.jid = raw_input("Username: ")
-    if opts.password is None:
-        opts.password = getpass.getpass("Password: ")
-    #if opts.room is None:
-    #    opts.room = raw_input("MUC room: ")
-    #if opts.nick is None:
-    #    opts.nick = raw_input("MUC nickname: ")
+    if (len(sys.argv) > 1):
+        opts.jid = sys.argv[1]
+        opts.password = sys.argv[2]
+        opts.room = sys.argv[3]
+        opts.nick = sys.argv[4]
+    else:
+        if opts.jid is None:
+            opts.jid = raw_input("Username: ")
+        if opts.password is None:
+            opts.password = getpass.getpass("Password: ")
+        if opts.room is None:
+            opts.room = raw_input("MUC room: ")
+        if opts.nick is None:
+            opts.nick = raw_input("MUC nickname: ")
 
     # Setup the MUCBot and register plugins. Note that while plugins may
     # have interdependencies, the order in which you register them does
