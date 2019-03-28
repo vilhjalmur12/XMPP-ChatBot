@@ -64,8 +64,6 @@ class MUCBot(sleekxmpp.ClientXMPP):
         self.add_event_handler("message" , self.reccieve_message)
 
 
-
-
     def start(self, event):
         """
         Process the session_start event.
@@ -91,26 +89,45 @@ class MUCBot(sleekxmpp.ClientXMPP):
         """Do some logging"""
         # TODO: breyta þessu í lampart
         timestamp = time.time()
-        print("hello world")
+        user = sender.user
+        domain = sender.domain
 
-        whole_string = f"{str(timestamp)}\t{sender.split('/')[0]}\t{command}"
+        whole_string = f"{str(timestamp)}\t{user}\t{domain}\t{command}\n"
 
+        #logging.basicConfig(filename='commands.log', filemode='w', format='%(name)s\t%(levelname)s\t%(message)s\n')
+        #logging.info("new stuff")
 
-
-        #logging.warning("hello")
-        #logging.basicConfig(filename='./commands.log', filemode='w', format='%(name)s\t%(levelname)s\t%(message)s\n')
-
-
-
-        with open('commands.log', 'w') as f:
+        with open('commands.log', 'a') as f:
             f.write(whole_string)
 
     def reccieve_message(self, msg):
         print('Command inbound: ', msg['body'])
         self.log(msg['body'], msg['from'])
+
         spltCommand = msg['body'].split()
 
+        if not spltCommand:
+            return
 
+        self.splitAndCommand(spltCommand, msg['from'])
+
+
+    def splitAndCommand(self, command, sender):
+
+        headCommand = command[0]
+
+        if headCommand == "log":
+            self.send_message(mto=sender.bare,
+                              mbody=self.getLogString())
+        # TODO: Setja öll commands hér
+        else:
+            self.send_message(mto=sender.bare, mbody="I did not recognize your command")
+
+
+
+    def getLogString(self):
+        with open('commands.log', 'r') as f:
+            return f.read()
 
     def muc_message(self, msg):
         """
