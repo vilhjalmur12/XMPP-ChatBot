@@ -88,7 +88,7 @@ class MUCBot(sleekxmpp.ClientXMPP):
 
     def log(self, command, sender):
         """Do some logging"""
-        # TODO: breyta þessu í lampart
+        # TODO: breyta þessu i lampart
         timestamp = time.time()
         user = sender.user
         domain = sender.domain
@@ -153,9 +153,45 @@ class MUCBot(sleekxmpp.ClientXMPP):
                    how it may be used.
         """
         if msg['mucnick'] != self.nick and self.nick in msg['body']:
+            if 'request' in msg['body']:
+                self.send_message(mto=msg['from'].bare,
+                              mbody="bot1, accept.",
+                              mtype='groupchat')
+                self.send_message(mto=msg['from'].bare,
+                              mbody="bot2, accept.",
+                              mtype='groupchat')
+                self.send_message(mto=msg['from'].bare,
+                              mbody="bot3, accept.",
+                              mtype='groupchat')
+                self.send_message(mto=msg['from'].bare,
+                              mbody="bot4, accept.",
+                              mtype='groupchat')
+            if 'accept.' in msg['body']:
+                self.send_message(mto=msg['from'].bare,
+                              mbody="verify, %s." % msg['mucnick'],
+                              mtype='groupchat')
+            if 'verify' in msg['body']:
+                self.send_message(mto=msg['from'].bare,
+                              mbody="bot1, accepted.",
+                              mtype='groupchat')
+                self.send_message(mto=msg['from'].bare,
+                              mbody="bot2, accepted.",
+                              mtype='groupchat')
+                self.send_message(mto=msg['from'].bare,
+                              mbody="bot3, accepted.",
+                              mtype='groupchat')
+                self.send_message(mto=msg['from'].bare,
+                              mbody="bot4, accepted.",
+                              mtype='groupchat')
+            if 'accepted' in msg['body']:
+                self.send_message(mto=msg['from'].bare,
+                              mbody="cool",
+                              mtype='groupchat')
+            """
             self.send_message(mto=msg['from'].bare,
                               mbody="I heard that, %s." % msg['mucnick'],
                               mtype='groupchat')
+            """
 
     def muc_online(self, presence):
         """
@@ -174,6 +210,7 @@ class MUCBot(sleekxmpp.ClientXMPP):
                               mbody="Hello, %s %s" % (presence['muc']['role'],
                                                       presence['muc']['nick']),
                               mtype='groupchat')
+            
 
 
 if __name__ == '__main__':
@@ -228,7 +265,7 @@ if __name__ == '__main__':
     if xmpp.connect():
         # If you do not have the dnspython library installed, you will need
         # to manually specify the name of the server if it does not match
-        # the one in the JID. For example, to use Google Talk you would
+        # the one in the JID. Fpor example, to use Google Talk you would
         # need to use:
         #
         # if xmpp.connect(('talk.google.com', 5222)):
