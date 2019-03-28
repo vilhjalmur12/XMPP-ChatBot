@@ -39,6 +39,7 @@ class MUCBot(sleekxmpp.ClientXMPP):
 
         self.room = room
         self.nick = nick
+        self.incoming_log = False
 
         # The session_start event will be triggered when
         # the bot establishes its connection with the server
@@ -210,10 +211,10 @@ if __name__ == '__main__':
         opts.jid = raw_input("Username: ")
     if opts.password is None:
         opts.password = getpass.getpass("Password: ")
-    if opts.room is None:
-        opts.room = raw_input("MUC room: ")
-    if opts.nick is None:
-        opts.nick = raw_input("MUC nickname: ")
+    #if opts.room is None:
+    #    opts.room = raw_input("MUC room: ")
+    #if opts.nick is None:
+    #    opts.nick = raw_input("MUC nickname: ")
 
     # Setup the MUCBot and register plugins. Note that while plugins may
     # have interdependencies, the order in which you register them does
