@@ -1,16 +1,9 @@
-"""
-    SleekXMPP: The Sleek XMPP Library
-    Copyright (C) 2010  Nathanael C. Fritz
-    This file is part of SleekXMPP.
-
-    See the file LICENSE for copying permission.
-"""
-
 import sys
 import logging
 import getpass
 from optparse import OptionParser
 import time
+from statistics import mode
 
 import sleekxmpp
 
@@ -28,20 +21,29 @@ raw_input = input
 
 class MUCBot(sleekxmpp.ClientXMPP):
 
-    """
-    A simple SleekXMPP bot that will greets those
-    who enter the room, and acknowledge any messages
-    that mentions the bot's nickname.
-    """
-
-    def __init__(self, jid, password, room, nick):
+    def __init__(self, jid, password, room, nick, leader):
         sleekxmpp.ClientXMPP.__init__(self, jid, password)
 
         self.jid = jid
         self.room = room
         self.nick = nick
         self.incoming_log = False
+        self.domain = "3.18.234.195"
         self.bot_room = "botroom@conference.3.18.234.195"
+        self.requester = ""
+        self.current_leader = 'bot1@3.18.234.195'
+        self.ballad_votes = []
+        self.server_count = 4
+        self.leader = leader
+        self.processess = {}
+        self.n = 1
+        self.process_n = 1
+        self.quorums = [ f'bot1@3.18.234.195', f'bot2@3.18.234.195', f'bot3@3.18.234.195', f'bot4@3.18.234.195' ]
+        self.active_quorums = [ f'bot1@3.18.234.195', f'bot2@3.18.234.195', f'bot3@3.18.234.195', f'bot4@3.18.234.195' ]
+
+        # game environment
+        self.direction = 'north'
+        self.available_actions = {'turn-right', 'turn-left'}
 
         # The session_start event will be triggered when
         # the bot establishes its connection with the server
@@ -64,22 +66,15 @@ class MUCBot(sleekxmpp.ClientXMPP):
         self.add_event_handler("muc::%s::got_online" % self.room,
                                self.muc_online)
 
+
+        self.add_event_handler("muc::%s::got_offline" % self.room,
+                               self.muc_offline)
+
         self.add_event_handler("message" , self.reccieve_message)
 
 
     def start(self, event):
-        """
-        Process the session_start event.
 
-        Typical actions for the session_start event are
-        requesting the roster and broadcasting an initial
-        presence stanza.
-
-        Arguments:
-            event -- An empty dictionary. The session_start
-                     event does not provide any additional
-                     data.
-        """
         self.get_roster()
         self.send_presence()
         self.plugin['xep_0045'].joinMUC(self.room,
@@ -88,17 +83,15 @@ class MUCBot(sleekxmpp.ClientXMPP):
                                         # password=the_room_password,
                                         wait=True)
 
+
     def log(self, command, sender):
         """Do some logging"""
-        # TODO: breyta þessu i lampart
+        # TODO: breyta þessu i lampart eða vector clocks
         timestamp = time.time()
         user = sender.user
         domain = sender.domain
 
-        whole_string = f"{str(timestamp)}\t{user}\t{domain}\t{command}\n"
-
-        #logging.basicConfig(filename='commands.log', filemode='w', format='%(name)s\t%(levelname)s\t%(message)s\n')
-        #logging.info("new stuff")
+        whole_string = f"{self.n}\t{str(timestamp)}\t{user}\t{domain}\t{command}\n"
 
         with open(f"{self.jid}_log.log", 'a') as f:
             f.write(whole_string)
@@ -106,11 +99,11 @@ class MUCBot(sleekxmpp.ClientXMPP):
     def reccieve_message(self, msg):
 
         if msg['from'].bare != self.bot_room:
-            print('Command inbound: ', msg['body'])
-
-            self.log(msg['body'], msg['from'])
+            #print('Command inbound: ', msg['body'])
 
             spltCommand = msg['body'].split()
+
+            self.log(msg['body'], msg['from'])
 
             if not spltCommand:
                 return
@@ -125,26 +118,103 @@ class MUCBot(sleekxmpp.ClientXMPP):
         if headCommand == "log":
             self.send_message(mto=sender.bare,
                               mbody=self.getLogString())
-        # TODO: Setja öll commands hér
-        elif headCommand == "request":
-            self.send_message(mto=self.bot_room,
-                              mbody='accept',
-                              mtype='groupchat')
-        elif headCommand == "accept":
-            self.send_message(mto=self.bot_room,
-                              mbody='verify',
-                              mtype='groupchat')
-        elif headCommand == "verify":
-            self.send_message(mto=self.bot_room,
-                              mbody='accepted',
-                              mtype='groupchat')
-        elif headCommand == "accepted":
-            self.send_message(mto=self.bot_room,
-                              mbody='cool',
-                              mtype='groupchat')
-        else:
-            self.send_message(mto=sender.bare, mbody="I did not recognize your command")
 
+        if self.leader:
+            # TODO: Remove the sleep
+            time.sleep(1)
+
+            if (len(self.active_quorums) - len(self.quorums)) >= len(self.quorums):
+                self.send_message(mto=sender.bare, mbody="monk")
+                return
+
+            if headCommand == "direction":
+                self.send_message(mto=sender.bare, mbody=self.direction)
+                return
+
+            # TODO: tests
+            if headCommand == "servercount":
+                self.send_message(mto=sender.bare, mbody=str(len(self.active_quorums)))
+                return
+
+
+            if headCommand == "promise":
+                print(command)
+                if (len(self.active_quorums) - 1 == len(self.ballad_votes)):
+                    # here we process the verifying votes
+                    self.ballad_votes.append(command[2])
+
+                    # the votes chosen
+                    vote = mode(self.ballad_votes)
+
+                    self.send_message(mto=self.bot_room,
+                                      mbody=f'accept {self.n} {self.jid} {vote}',
+                                      mtype='groupchat')
+                    self.ballad_votes = []
+                    self.ballad_votes.append(self.own_vote)
+                else:
+                    self.ballad_votes.append(command[2])
+
+            elif headCommand == "accepted":
+                if (len(self.active_quorums) - 1 <= len(self.ballad_votes)):
+                    # here the last voting
+                    self.ballad_votes.append(command[3])
+
+                    vote = mode(self.ballad_votes)
+
+                    # send to gateway
+                    self.send_message(mto=self.requester,
+                                    mbody=f"{self.requester} you are facing {vote} sent from: {self.jid}")
+
+                    self.ballad_votes = []
+                    self.requester = ""
+                    del self.processess[self.n]
+                    self.n += 1
+                    if self.processess:
+                        self.requester = self.processess[self.n]['sender']
+                        self.sendRequest(self.requester)
+                else:
+                    self.ballad_votes.append(command[3])
+            else:
+                if command[0] not in self.available_actions:
+                    error_string = f"Did not recognize try: turn-left, turn-right or direction - sent from: {self.jid}"
+                    self.send_message(mto=sender.bare, mbody=error_string)
+                    return
+
+                print(command)
+
+                if not self.processess:
+                    self.process_n = self.n
+                    self.processess[self.n] = {"sender": sender.bare, "command": command }
+                    self.sendRequest(sender.bare, command[0])
+                else:
+                    self.process_n += 1
+                    self.processess[self.process_n] = { "sender": sender.bare, "command": command }
+        else:
+            self.send_message(mto=sender.bare, mbody=f"Unauthorized! Ask {self.current_leader}")
+
+
+    def figureDirection(self, action):
+        if self.direction == 'north':
+            tmp = { 'turn-right': 'east', 'turn-left': 'west' }
+            return tmp[action]
+        elif self.direction == 'south':
+            tmp = {'turn-right': 'west', 'turn-left': 'east'}
+            return tmp[action]
+        elif self.direction == 'east':
+            tmp = {'turn-right': 'south', 'turn-left': 'north'}
+            return tmp[action]
+        else:
+            tmp = {'turn-right': 'north', 'turn-left': 'south'}
+            return tmp[action]
+
+
+    def sendRequest(self, sender, command):
+        self.requester = sender
+        self.own_vote = self.figureDirection(command)
+        self.ballad_votes.append(self.own_vote)
+        self.send_message(mto=self.bot_room,
+                          mbody=f'prepare {self.n} {self.jid} {self.requester} {command}',
+                          mtype='groupchat')
 
 
     def getLogString(self):
@@ -152,48 +222,32 @@ class MUCBot(sleekxmpp.ClientXMPP):
             return f.read()
 
     def muc_message(self, msg):
-        """
-        Process incoming message stanzas from any chat room. Be aware
-        that if you also have any handlers for the 'message' event,
-        message stanzas may be processed by both handlers, so check
-        the 'type' attribute when using a 'message' event handler.
 
-        Whenever the bot's nickname is mentioned, respond to
-        the message.
-
-        IMPORTANT: Always check that a message is not from yourself,
-                   otherwise you will create an infinite loop responding
-                   to your own messages.
-
-        This handler will reply to messages that mention
-        the bot's nickname.
-
-        Arguments:
-            msg -- The received message stanza. See the documentation
-                   for stanza objects and the Message stanza to see
-                   how it may be used.
-        """
         if msg['mucnick'] != self.nick:
+            spltCommand = msg["body"].split()
+            headCommand = spltCommand[0]
+            if 'prepare' == headCommand:
+                self.n = spltCommand[1]
+                messageTo = spltCommand[2]
+                self.requester = spltCommand[3]
 
-            headCommand = msg["body"].split()[0]
-            print(msg['from'].bare)
-            if 'request' == headCommand:
-                self.send_message(mto=msg['from'].bare,
-                                mbody=f"accept {self.jid}",
-                                mtype='groupchat')
+                # TODO: decide vote
+                self.own_vote = self.figureDirection(spltCommand[4])
+
+                self.send_message(mto=messageTo,
+                                  mbody=f'promise {self.n} {self.own_vote}')
             elif 'accept' == headCommand:
-                print("got accept")
-                self.send_message(mto=msg['from'].bare,
-                                mbody=f"verify {self.jid}",
-                                mtype='groupchat')
-            elif 'verify' == headCommand:
-                self.send_message(mto=msg['from'].bare,
-                                mbody=f"accepted {self.jid}",
-                                mtype='groupchat')
-            elif 'accepted' == headCommand:
-                self.send_message(mto=msg['from'].bare,
-                                mbody="cool",
-                                mtype='groupchat')
+
+                if spltCommand[3] == self.own_vote:
+                    response_message = f"accepted {self.n} agree {self.own_vote}"
+                    self.direction = spltCommand[3]
+                else:
+                    response_message = f"accepted {self.n} disagree {self.own_vote}"
+
+
+                messageTo = spltCommand[2]
+                self.send_message(mto=messageTo,
+                                mbody=response_message)
 
             """
             self.send_message(mto=msg['from'].bare,
@@ -202,23 +256,60 @@ class MUCBot(sleekxmpp.ClientXMPP):
             """
 
     def muc_online(self, presence):
-        """
-        Process a presence stanza from a chat room. In this case,
-        presences from users that have just come online are
-        handled by sending a welcome message that includes
-        the user's nickname and role in the room.
 
-        Arguments:
-            presence -- The received presence stanza. See the
-                        documentation for the Presence stanza
-                        to see how else it may be used.
-        """
-        if presence['muc']['nick'] != self.nick:
-            self.send_message(mto=presence['from'].bare,
-                              mbody="Hello, %s %s" % (presence['muc']['role'],
-                                                      presence['muc']['nick']),
-                              mtype='groupchat')
-            
+        incomer = f'{presence["muc"]}@{self.domain}'
+
+        if incomer in self.quorums:
+            self.active_quorums.append(incomer)
+
+        #self.server_count += 1
+
+        # if presence['muc']['nick'] != self.nick:
+        #    self.send_message(mto=presence['from'].bare,
+        #                      mbody="Hello %s %s" % (presence['muc']['role'],
+        #                                              presence['muc']['nick']),
+        #                      mtype='groupchat')
+
+        # self.dumbRosterIncr(presence['muc']['nick'])
+
+    def muc_offline(self, presence):
+
+        goner_jid = f"{presence['muc']['nick']}@{self.domain}"
+        if goner_jid in self.active_quorums:
+            self.active_quorums.remove(goner_jid)
+
+        if goner_jid in self.quorums:
+            print('is goner')
+            self.quorums.remove(goner_jid)
+
+            self.current_leader = self.quorums.pop()
+            self.quorums.append(self.current_leader)
+
+            print(self.current_leader)
+
+            if self.jid == self.current_leader:
+                print('is the new leader')
+                self.leader = True
+
+                '''
+                with open(f'{goner_jid}_log.log', 'r') as f:
+                    text = f.read()
+                    text = text.split('\n')
+                    self.n = text[:text.count() - 1].split()[0]
+
+                    print(text[:text.count() - 1].split()[0])
+                '''
+
+                self.sendRequest(self.requester)
+
+
+
+        print(self.quorums)
+
+        if goner_jid == self.current_leader:
+            print(self.quorums[0])
+
+
 
 
 if __name__ == '__main__':
@@ -252,11 +343,15 @@ if __name__ == '__main__':
     #logging.basicConfig(level=opts.loglevel,
                         #format='%(levelname)-8s %(message)s')
 
+    leader = False
+
     if (len(sys.argv) > 1):
         opts.jid = sys.argv[1]
         opts.password = sys.argv[2]
         opts.room = sys.argv[3]
         opts.nick = sys.argv[4]
+        if sys.argv[1] == 'bot1@3.18.234.195':
+            leader = True
     else:
         if opts.jid is None:
             opts.jid = raw_input("Username: ")
@@ -267,24 +362,14 @@ if __name__ == '__main__':
         if opts.nick is None:
             opts.nick = raw_input("MUC nickname: ")
 
-    # Setup the MUCBot and register plugins. Note that while plugins may
-    # have interdependencies, the order in which you register them does
-    # not matter.
-    xmpp = MUCBot(opts.jid, opts.password, opts.room, opts.nick)
+
+    xmpp = MUCBot(opts.jid, opts.password, opts.room, opts.nick, leader)
     xmpp.register_plugin('xep_0030') # Service Discovery
     xmpp.register_plugin('xep_0045') # Multi-User Chat
     xmpp.register_plugin('xep_0199') # XMPP Ping
 
     # Connect to the XMPP server and start processing XMPP stanzas.
     if xmpp.connect():
-        # If you do not have the dnspython library installed, you will need
-        # to manually specify the name of the server if it does not match
-        # the one in the JID. Fpor example, to use Google Talk you would
-        # need to use:
-        #
-        # if xmpp.connect(('talk.google.com', 5222)):
-        #     ...
-
 
         xmpp.process(block=True)
 
