@@ -175,7 +175,7 @@ class MUCBot(sleekxmpp.ClientXMPP):
                     # send to gateway
                     gateway = 'gateway@3.18.234.195'
                     self.send_message(mto=gateway,
-                                    mbody=f"{self.requester} you are facing {vote} sent from: {self.jid}")
+                                    mbody=f"you are facing {vote} sent from: {self.jid}")
 
                     self.ballad_votes = []
                     self.requester = ""
