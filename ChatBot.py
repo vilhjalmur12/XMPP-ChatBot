@@ -4,6 +4,7 @@ import getpass
 from optparse import OptionParser
 import time
 from statistics import mode
+import re
 
 import sleekxmpp
 
@@ -83,6 +84,9 @@ class MUCBot(sleekxmpp.ClientXMPP):
                                         # password=the_room_password,
                                         wait=True)
 
+    def checkGatewayJID(self, id):
+        id = id.split('/')
+        return id[0] == 'gateway@3.18.234.195'
 
     def log(self, command, sender):
         """Do some logging"""
@@ -99,16 +103,22 @@ class MUCBot(sleekxmpp.ClientXMPP):
     def reccieve_message(self, msg):
 
         if msg['from'].bare != self.bot_room:
-            #print('Command inbound: ', msg['body'])
 
-            spltCommand = msg['body'].split()
+            if self.checkGatewayJID(msg['from'].bare):
+                sender = msg['body'].split(' ', 1)[0]
+                command = msg['body'].split(' ', 1)[1]
+                spltCommand = command.split()
+            else:
+                sender = msg['from'].bare
+                spltCommand = msg['body'].split()
 
-            self.log(msg['body'], msg['from'])
+
+            self.log(msg['body'], sender)
 
             if not spltCommand:
                 return
 
-            self.splitAndCommand(spltCommand, msg['from'])
+            self.splitAndCommand(spltCommand, sender)
 
 
     def splitAndCommand(self, command, sender):
@@ -116,7 +126,7 @@ class MUCBot(sleekxmpp.ClientXMPP):
         headCommand = command[0]
 
         if headCommand == "log":
-            self.send_message(mto=sender.bare,
+            self.send_message(mto=sender,
                               mbody=self.getLogString())
 
         if self.leader:
@@ -124,16 +134,17 @@ class MUCBot(sleekxmpp.ClientXMPP):
             time.sleep(1)
 
             if (len(self.active_quorums) - len(self.quorums)) >= len(self.quorums):
-                self.send_message(mto=sender.bare, mbody="monk")
+                self.send_message(mto=sender, mbody="service is unavailable")
                 return
 
-            if headCommand == "direction":
-                self.send_message(mto=sender.bare, mbody=self.direction)
+            if command[0] == "direction":
+                message = f'{sender} {self.direction}'
+                self.send_message(mto='gateway@3.18.234.195', mbody=message)
                 return
 
             # TODO: tests
             if headCommand == "servercount":
-                self.send_message(mto=sender.bare, mbody=str(len(self.active_quorums)))
+                self.send_message(mto='gateway@3.18.234.195', mbody=str(len(self.active_quorums)))
                 return
 
 
@@ -162,7 +173,8 @@ class MUCBot(sleekxmpp.ClientXMPP):
                     vote = mode(self.ballad_votes)
 
                     # send to gateway
-                    self.send_message(mto=self.requester,
+                    gateway = 'gateway@3.18.234.195'
+                    self.send_message(mto=gateway,
                                     mbody=f"{self.requester} you are facing {vote} sent from: {self.jid}")
 
                     self.ballad_votes = []
@@ -175,22 +187,22 @@ class MUCBot(sleekxmpp.ClientXMPP):
                 else:
                     self.ballad_votes.append(command[3])
             else:
-                if command[0] not in self.available_actions:
+                if command[1] not in self.available_actions:
                     error_string = f"Did not recognize try: turn-left, turn-right or direction - sent from: {self.jid}"
-                    self.send_message(mto=sender.bare, mbody=error_string)
+                    self.send_message(mto=sender, mbody=error_string)
                     return
 
                 print(command)
 
                 if not self.processess:
                     self.process_n = self.n
-                    self.processess[self.n] = {"sender": sender.bare, "command": command }
-                    self.sendRequest(sender.bare, command[0])
+                    self.processess[self.n] = {"sender": sender, "command": command }
+                    self.sendRequest(sender, command[1])
                 else:
                     self.process_n += 1
-                    self.processess[self.process_n] = { "sender": sender.bare, "command": command }
+                    self.processess[self.process_n] = { "sender": sender, "command": command }
         else:
-            self.send_message(mto=sender.bare, mbody=f"Unauthorized! Ask {self.current_leader}")
+            self.send_message(mto=sender, mbody=f"Unauthorized! Ask {self.current_leader}")
 
 
     def figureDirection(self, action):
@@ -209,6 +221,8 @@ class MUCBot(sleekxmpp.ClientXMPP):
 
 
     def sendRequest(self, sender, command):
+        self.requester = sender
+
         self.requester = sender
         self.own_vote = self.figureDirection(command)
         self.ballad_votes.append(self.own_vote)
@@ -262,15 +276,6 @@ class MUCBot(sleekxmpp.ClientXMPP):
         if incomer in self.quorums:
             self.active_quorums.append(incomer)
 
-        #self.server_count += 1
-
-        # if presence['muc']['nick'] != self.nick:
-        #    self.send_message(mto=presence['from'].bare,
-        #                      mbody="Hello %s %s" % (presence['muc']['role'],
-        #                                              presence['muc']['nick']),
-        #                      mtype='groupchat')
-
-        # self.dumbRosterIncr(presence['muc']['nick'])
 
     def muc_offline(self, presence):
 
@@ -288,7 +293,7 @@ class MUCBot(sleekxmpp.ClientXMPP):
             print(self.current_leader)
 
             if self.jid == self.current_leader:
-                print('is the new leader')
+                self.send_message(mto='gateway@3.18.234.195', mbody=f'newleader {self.jid}')
                 self.leader = True
 
                 '''
@@ -301,13 +306,6 @@ class MUCBot(sleekxmpp.ClientXMPP):
                 '''
 
                 self.sendRequest(self.requester)
-
-
-
-        print(self.quorums)
-
-        if goner_jid == self.current_leader:
-            print(self.quorums[0])
 
 
 

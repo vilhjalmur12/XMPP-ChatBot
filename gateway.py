@@ -1,4 +1,5 @@
 import logging
+import re
 
 from sleekxmpp import ClientXMPP
 from sleekxmpp.exceptions import IqError, IqTimeout
@@ -13,7 +14,7 @@ class EchoBot(ClientXMPP):
         self.available_actions = {'turn-right', 'turn-left', 'direction'}
         self.current_leader = 'bot1@3.18.234.195'
         self.quorums = {f'bot1@3.18.234.195', f'bot2@3.18.234.195', f'bot3@3.18.234.195', f'bot4@3.18.234.195'}
-
+        self.connected = set()
 
         self.add_event_handler("session_start", self.session_start)
         self.add_event_handler("message", self.message)
@@ -48,38 +49,39 @@ class EchoBot(ClientXMPP):
         #     self.disconnect()
 
     def message(self, msg):
-        reciever = msg['from'].split('/')
+        reciever = str(msg['from']).split('/')
         reciever = reciever[0]
 
+        print(msg['body'])
+
+        if 'newleader' in msg['body']:
+            tmp = msg['body'].split()
+            self.current_leader = tmp[1]
+            return
+
+        if reciever not in self.connected and reciever not in self.quorums:
+            self.connected.add(reciever)
+            self.send_message(mto=reciever, mbody='oh hi there!')
+
+            welcome_string = f'=====   Welcome to the blind mans direction   =====\n\ndirection: tells you what direction you are facing\nturn-left: tells you what direction you are facing after turning left\nturn-right: tells you what direction you are facing after turning right\nquit: quit the game'
+            self.send_message(mto=reciever, mbody=welcome_string)
+            return
+
         if msg['body'] in self.available_actions:
-            self.send_message(mto=self.current_leader, mbody=msg['body'])
+            self.send_message(mto=self.current_leader, mbody=f'{msg["from"].bare} {msg["body"]}')
         elif reciever in self.quorums:
+            #print(msg['body'])
             tmp = msg['body'].split()
             tmp = tmp[0]
-            self.send_message(mto=tmp, mbody=msg['body'])
+            message = msg['body'].split(' ', 1)[1]
+            self.send_message(mto=tmp, mbody=message)
         else:
             self.send_message(mto=msg['from'].bare, mbody="Not valid")
+
 
 if __name__ == '__main__':
 
     xmpp = EchoBot('gateway@3.18.234.195', 'password')
     xmpp.connect()
-
-    print("=====   Welcome to the blind mans direction   =====")
-    print("There are several helpers to help you with the direction... ask them")
-
-    print("==========   Actions  =========")
-    print(" direction: tells you what direction you are facing")
-    print(" turn-left: tells you what direction you are facing after turning left")
-    print(" turn-right: tells you what direction you are facing after turning right")
-    print(" quit: quit the game ")
-    print("===================================")
-
-
-    arg = ""
-
-    while (arg != "quit"):
-        print("hello")
-
 
     xmpp.process(block=True)
